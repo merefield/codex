@@ -21,6 +21,8 @@ use crate::tools::events::ToolEventCtx;
 use crate::tools::handlers::apply_granted_turn_permissions;
 use crate::tools::handlers::parse_arguments;
 use crate::tools::orchestrator::ToolOrchestrator;
+use crate::tools::registry::PostToolUsePayload;
+use crate::tools::registry::PreToolUsePayload;
 use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
 use crate::tools::runtimes::apply_patch::ApplyPatchRequest;
@@ -31,6 +33,7 @@ use crate::tools::spec::JsonSchema;
 use async_trait::async_trait;
 use codex_apply_patch::ApplyPatchAction;
 use codex_apply_patch::ApplyPatchFileChange;
+use codex_hooks::ToolUseHookInput;
 use codex_protocol::models::FileSystemPermissions;
 use codex_protocol::models::PermissionProfile;
 use codex_sandboxing::policy_transforms::effective_file_system_sandbox_policy;
@@ -66,6 +69,16 @@ fn file_paths_for_action(action: &ApplyPatchAction) -> Vec<AbsolutePathBuf> {
 
 fn to_abs_path(cwd: &Path, path: &Path) -> Option<AbsolutePathBuf> {
     AbsolutePathBuf::resolve_path_against_base(path, cwd).ok()
+}
+
+fn apply_patch_input(payload: &ToolPayload) -> Option<String> {
+    match payload {
+        ToolPayload::Function { arguments } => parse_arguments::<ApplyPatchToolArgs>(arguments)
+            .ok()
+            .map(|args| args.input),
+        ToolPayload::Custom { input } => Some(input.clone()),
+        _ => None,
+    }
 }
 
 fn write_permissions_for_paths(
@@ -147,6 +160,27 @@ impl ToolHandler for ApplyPatchHandler {
 
     async fn is_mutating(&self, _invocation: &ToolInvocation) -> bool {
         true
+    }
+
+    fn pre_tool_use_payload(&self, invocation: &ToolInvocation) -> Option<PreToolUsePayload> {
+        apply_patch_input(&invocation.payload).map(|input| PreToolUsePayload {
+            tool_name: "Edit".to_string(),
+            tool_input: ToolUseHookInput::Input(input),
+        })
+    }
+
+    fn post_tool_use_payload(
+        &self,
+        call_id: &str,
+        payload: &ToolPayload,
+        result: &dyn crate::tools::context::ToolOutput,
+    ) -> Option<PostToolUsePayload> {
+        let tool_response = result.post_tool_use_response(call_id, payload)?;
+        Some(PostToolUsePayload {
+            tool_name: "Edit".to_string(),
+            tool_input: ToolUseHookInput::Input(apply_patch_input(payload)?),
+            tool_response,
+        })
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {

@@ -6,6 +6,7 @@ use codex_hooks::PostToolUseRequest;
 use codex_hooks::PreToolUseOutcome;
 use codex_hooks::PreToolUseRequest;
 use codex_hooks::SessionStartOutcome;
+use codex_hooks::ToolUseHookInput;
 use codex_hooks::UserPromptSubmitOutcome;
 use codex_hooks::UserPromptSubmitRequest;
 use codex_protocol::items::TurnItem;
@@ -118,7 +119,8 @@ pub(crate) async fn run_pre_tool_use_hooks(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
     tool_use_id: String,
-    command: String,
+    tool_name: String,
+    tool_input: ToolUseHookInput,
 ) -> Option<String> {
     let request = PreToolUseRequest {
         session_id: sess.conversation_id,
@@ -127,9 +129,9 @@ pub(crate) async fn run_pre_tool_use_hooks(
         transcript_path: sess.hook_transcript_path().await,
         model: turn_context.model_info.slug.clone(),
         permission_mode: hook_permission_mode(turn_context),
-        tool_name: "Bash".to_string(),
+        tool_name,
         tool_use_id,
-        command,
+        tool_input,
     };
     let preview_runs = sess.hooks().preview_pre_tool_use(&request);
     emit_hook_started_events(sess, turn_context, preview_runs).await;
@@ -148,7 +150,8 @@ pub(crate) async fn run_post_tool_use_hooks(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
     tool_use_id: String,
-    command: String,
+    tool_name: String,
+    tool_input: ToolUseHookInput,
     tool_response: Value,
 ) -> PostToolUseOutcome {
     let request = PostToolUseRequest {
@@ -158,9 +161,9 @@ pub(crate) async fn run_post_tool_use_hooks(
         transcript_path: sess.hook_transcript_path().await,
         model: turn_context.model_info.slug.clone(),
         permission_mode: hook_permission_mode(turn_context),
-        tool_name: "Bash".to_string(),
+        tool_name,
         tool_use_id,
-        command,
+        tool_input,
         tool_response,
     };
     let preview_runs = sess.hooks().preview_post_tool_use(&request);

@@ -23,6 +23,7 @@ use codex_hooks::HookResult;
 use codex_hooks::HookToolInput;
 use codex_hooks::HookToolInputLocalShell;
 use codex_hooks::HookToolKind;
+use codex_hooks::ToolUseHookInput;
 use codex_protocol::models::ResponseInputItem;
 use codex_utils_readiness::Readiness;
 use serde_json::Value;
@@ -102,12 +103,14 @@ impl AnyToolResult {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PreToolUsePayload {
-    pub(crate) command: String,
+    pub(crate) tool_name: String,
+    pub(crate) tool_input: ToolUseHookInput,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PostToolUsePayload {
-    pub(crate) command: String,
+    pub(crate) tool_name: String,
+    pub(crate) tool_input: ToolUseHookInput,
     pub(crate) tool_response: Value,
 }
 
@@ -300,14 +303,20 @@ impl ToolRegistry {
                 &invocation.session,
                 &invocation.turn,
                 invocation.call_id.clone(),
-                pre_tool_use_payload.command.clone(),
+                pre_tool_use_payload.tool_name.clone(),
+                pre_tool_use_payload.tool_input.clone(),
             )
             .await
         {
-            return Err(FunctionCallError::RespondToModel(format!(
-                "Command blocked by PreToolUse hook: {reason}. Command: {}",
-                pre_tool_use_payload.command
-            )));
+            let message = match &pre_tool_use_payload.tool_input {
+                ToolUseHookInput::Command(command) => {
+                    format!("Command blocked by PreToolUse hook: {reason}. Command: {command}")
+                }
+                ToolUseHookInput::Input(_) => {
+                    format!("Tool blocked by PreToolUse hook: {reason}. Tool: {tool_name}")
+                }
+            };
+            return Err(FunctionCallError::RespondToModel(message));
         }
 
         let is_mutating = handler.is_mutating(&invocation).await;
@@ -370,7 +379,8 @@ impl ToolRegistry {
                     &invocation.session,
                     &invocation.turn,
                     invocation.call_id.clone(),
-                    post_tool_use_payload.command,
+                    post_tool_use_payload.tool_name,
+                    post_tool_use_payload.tool_input,
                     post_tool_use_payload.tool_response,
                 )
                 .await,

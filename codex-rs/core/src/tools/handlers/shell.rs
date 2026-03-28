@@ -39,6 +39,7 @@ use crate::tools::runtimes::shell::ShellRuntimeBackend;
 use crate::tools::sandboxing::ToolCtx;
 use crate::tools::spec::ShellCommandBackendConfig;
 use codex_features::Feature;
+use codex_hooks::ToolUseHookInput;
 use codex_protocol::models::PermissionProfile;
 
 pub struct ShellHandler;
@@ -206,7 +207,10 @@ impl ToolHandler for ShellHandler {
     }
 
     fn pre_tool_use_payload(&self, invocation: &ToolInvocation) -> Option<PreToolUsePayload> {
-        shell_payload_command(&invocation.payload).map(|command| PreToolUsePayload { command })
+        shell_payload_command(&invocation.payload).map(|command| PreToolUsePayload {
+            tool_name: "Bash".to_string(),
+            tool_input: ToolUseHookInput::Command(command),
+        })
     }
 
     fn post_tool_use_payload(
@@ -217,7 +221,8 @@ impl ToolHandler for ShellHandler {
     ) -> Option<PostToolUsePayload> {
         let tool_response = result.post_tool_use_response(call_id, payload)?;
         Some(PostToolUsePayload {
-            command: shell_payload_command(payload)?,
+            tool_name: "Bash".to_string(),
+            tool_input: ToolUseHookInput::Command(shell_payload_command(payload)?),
             tool_response,
         })
     }
@@ -313,8 +318,10 @@ impl ToolHandler for ShellCommandHandler {
     }
 
     fn pre_tool_use_payload(&self, invocation: &ToolInvocation) -> Option<PreToolUsePayload> {
-        shell_command_payload_command(&invocation.payload)
-            .map(|command| PreToolUsePayload { command })
+        shell_command_payload_command(&invocation.payload).map(|command| PreToolUsePayload {
+            tool_name: "Bash".to_string(),
+            tool_input: ToolUseHookInput::Command(command),
+        })
     }
 
     fn post_tool_use_payload(
@@ -325,7 +332,8 @@ impl ToolHandler for ShellCommandHandler {
     ) -> Option<PostToolUsePayload> {
         let tool_response = result.post_tool_use_response(call_id, payload)?;
         Some(PostToolUsePayload {
-            command: shell_command_payload_command(payload)?,
+            tool_name: "Bash".to_string(),
+            tool_input: ToolUseHookInput::Command(shell_command_payload_command(payload)?),
             tool_response,
         })
     }

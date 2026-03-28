@@ -28,6 +28,7 @@ use crate::unified_exec::UnifiedExecProcessManager;
 use crate::unified_exec::WriteStdinRequest;
 use async_trait::async_trait;
 use codex_features::Feature;
+use codex_hooks::ToolUseHookInput;
 use codex_otel::SessionTelemetry;
 use codex_otel::metrics::names::TOOL_CALL_UNIFIED_EXEC_METRIC;
 use codex_protocol::models::PermissionProfile;
@@ -133,7 +134,10 @@ impl ToolHandler for UnifiedExecHandler {
 
         parse_arguments::<ExecCommandArgs>(arguments)
             .ok()
-            .map(|args| PreToolUsePayload { command: args.cmd })
+            .map(|args| PreToolUsePayload {
+                tool_name: "Bash".to_string(),
+                tool_input: ToolUseHookInput::Command(args.cmd),
+            })
     }
 
     fn post_tool_use_payload(
@@ -153,7 +157,8 @@ impl ToolHandler for UnifiedExecHandler {
 
         let tool_response = result.post_tool_use_response(call_id, payload)?;
         Some(PostToolUsePayload {
-            command: args.cmd,
+            tool_name: "Bash".to_string(),
+            tool_input: ToolUseHookInput::Command(args.cmd),
             tool_response,
         })
     }

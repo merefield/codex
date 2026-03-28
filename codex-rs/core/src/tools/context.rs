@@ -240,6 +240,10 @@ impl ToolOutput for ApplyPatchToolOutput {
         )
     }
 
+    fn post_tool_use_response(&self, _call_id: &str, _payload: &ToolPayload) -> Option<JsonValue> {
+        Some(JsonValue::String(self.text.clone()))
+    }
+
     fn code_mode_result(&self, _payload: &ToolPayload) -> JsonValue {
         JsonValue::Object(serde_json::Map::new())
     }

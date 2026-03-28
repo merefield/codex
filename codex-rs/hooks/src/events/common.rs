@@ -7,6 +7,12 @@ use codex_protocol::protocol::HookRunStatus;
 use crate::engine::ConfiguredHandler;
 use crate::engine::dispatcher;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolUseHookInput {
+    Command(String),
+    Input(String),
+}
+
 pub(crate) fn join_text_chunks(chunks: Vec<String>) -> Option<String> {
     if chunks.is_empty() {
         None

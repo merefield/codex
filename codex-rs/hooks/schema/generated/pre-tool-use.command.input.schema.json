@@ -8,16 +8,16 @@
         "null"
       ]
     },
-    "PreToolUseToolInput": {
+    "ToolUseTextInput": {
       "additionalProperties": false,
       "properties": {
         "command": {
           "type": "string"
+        },
+        "input": {
+          "type": "string"
         }
       },
-      "required": [
-        "command"
-      ],
       "type": "object"
     }
   },
@@ -46,10 +46,13 @@
       "type": "string"
     },
     "tool_input": {
-      "$ref": "#/definitions/PreToolUseToolInput"
+      "$ref": "#/definitions/ToolUseTextInput"
     },
     "tool_name": {
-      "const": "Bash",
+      "enum": [
+        "Bash",
+        "Edit"
+      ],
       "type": "string"
     },
     "tool_use_id": {
