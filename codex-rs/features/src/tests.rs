@@ -97,6 +97,26 @@ fn guardian_approval_is_experimental_and_user_toggleable() {
 }
 
 #[test]
+fn repository_intelligence_is_experimental_and_user_toggleable() {
+    let spec = Feature::RepositoryIntelligence.info();
+    let stage = spec.stage;
+
+    assert!(matches!(stage, Stage::Experimental { .. }));
+    assert_eq!(
+        stage.experimental_menu_name(),
+        Some("Repository intelligence")
+    );
+    assert_eq!(
+        stage.experimental_menu_description(),
+        Some(
+            "Prefer structured repository-intelligence MCP tools for code discovery and context when suitable tools are available."
+        )
+    );
+    assert_eq!(stage.experimental_announcement(), None);
+    assert_eq!(Feature::RepositoryIntelligence.default_enabled(), false);
+}
+
+#[test]
 fn request_permissions_is_under_development() {
     assert_eq!(
         Feature::ExecPermissionApprovals.stage(),

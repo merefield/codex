@@ -172,6 +172,8 @@ pub enum Feature {
     Artifact,
     /// Enable Fast mode selection in the TUI and request layer.
     FastMode,
+    /// Prefer repository-intelligence MCP tools for code discovery.
+    RepositoryIntelligence,
     /// Enable voice transcription in the TUI composer.
     VoiceTranscription,
     /// Enable experimental realtime voice conversation mode in the TUI.
@@ -812,6 +814,16 @@ pub const FEATURES: &[FeatureSpec] = &[
         key: "fast_mode",
         stage: Stage::Stable,
         default_enabled: true,
+    },
+    FeatureSpec {
+        id: Feature::RepositoryIntelligence,
+        key: "repository_intelligence",
+        stage: Stage::Experimental {
+            name: "Repository intelligence",
+            menu_description: "Prefer structured repository-intelligence MCP tools for code discovery and context when suitable tools are available.",
+            announcement: "",
+        },
+        default_enabled: false,
     },
     FeatureSpec {
         id: Feature::VoiceTranscription,

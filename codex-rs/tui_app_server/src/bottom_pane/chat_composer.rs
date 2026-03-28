@@ -405,6 +405,7 @@ pub(crate) struct ChatComposer {
     connectors_enabled: bool,
     plugins_command_enabled: bool,
     fast_command_enabled: bool,
+    repository_intelligence_command_enabled: bool,
     personality_command_enabled: bool,
     realtime_conversation_enabled: bool,
     audio_device_selection_enabled: bool,
@@ -444,6 +445,7 @@ impl ChatComposer {
             connectors_enabled: self.connectors_enabled,
             plugins_command_enabled: self.plugins_command_enabled,
             fast_command_enabled: self.fast_command_enabled,
+            repository_intelligence_command_enabled: self.repository_intelligence_command_enabled,
             personality_command_enabled: self.personality_command_enabled,
             realtime_conversation_enabled: self.realtime_conversation_enabled,
             audio_device_selection_enabled: self.audio_device_selection_enabled,
@@ -529,6 +531,7 @@ impl ChatComposer {
             connectors_enabled: false,
             plugins_command_enabled: false,
             fast_command_enabled: false,
+            repository_intelligence_command_enabled: false,
             personality_command_enabled: false,
             realtime_conversation_enabled: false,
             audio_device_selection_enabled: false,
@@ -606,6 +609,10 @@ impl ChatComposer {
 
     pub fn set_fast_command_enabled(&mut self, enabled: bool) {
         self.fast_command_enabled = enabled;
+    }
+
+    pub fn set_repository_intelligence_command_enabled(&mut self, enabled: bool) {
+        self.repository_intelligence_command_enabled = enabled;
     }
 
     pub fn set_collaboration_mode_indicator(
@@ -3498,6 +3505,8 @@ impl ChatComposer {
                     let connectors_enabled = self.connectors_enabled;
                     let plugins_command_enabled = self.plugins_command_enabled;
                     let fast_command_enabled = self.fast_command_enabled;
+                    let repository_intelligence_command_enabled =
+                        self.repository_intelligence_command_enabled;
                     let personality_command_enabled = self.personality_command_enabled;
                     let realtime_conversation_enabled = self.realtime_conversation_enabled;
                     let audio_device_selection_enabled = self.audio_device_selection_enabled;
@@ -3508,6 +3517,7 @@ impl ChatComposer {
                             connectors_enabled,
                             plugins_command_enabled,
                             fast_command_enabled,
+                            repository_intelligence_command_enabled,
                             personality_command_enabled,
                             realtime_conversation_enabled,
                             audio_device_selection_enabled,
