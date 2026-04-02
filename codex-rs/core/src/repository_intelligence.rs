@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
-use crate::mcp::CODEX_APPS_MCP_SERVER_NAME;
-use crate::mcp_connection_manager::ToolInfo;
+use codex_mcp::mcp::CODEX_APPS_MCP_SERVER_NAME;
+use codex_mcp::mcp_connection_manager::ToolInfo;
 
 pub const DEVELOPER_INSTRUCTIONS: &str = "When suitable repository-intelligence MCP tools are available, prefer them for project structure, code search, symbol lookup, and code context before falling back to shell traversal such as `rg`, `find`, `sed`, or `cat`. Use shell tools when MCP tools are unavailable or insufficient.";
 
