@@ -102,6 +102,7 @@ use codex_core::config_loader::ConfigLayerStackOrdering;
 use codex_core::find_thread_name_by_id;
 use codex_core::plugins::PluginsManager;
 use codex_core::project_doc::DEFAULT_PROJECT_DOC_FILENAME;
+use codex_core::repository_intelligence::merge_developer_instructions as merge_repository_intelligence_developer_instructions;
 use codex_core::skills::model::SkillMetadata;
 #[cfg(target_os = "windows")]
 use codex_core::windows_sandbox::WindowsSandboxLevelExt;
@@ -1986,6 +1987,7 @@ impl ChatWidget {
         self.refresh_model_display();
         self.refresh_status_surfaces();
         self.sync_fast_command_enabled();
+        self.sync_repo_intelligence_command_enabled();
         self.sync_personality_command_enabled();
         self.sync_plugins_command_enabled();
         self.refresh_plugin_mentions();
@@ -4732,6 +4734,7 @@ impl ChatWidget {
             .bottom_pane
             .set_collaboration_modes_enabled(/*enabled*/ true);
         widget.sync_fast_command_enabled();
+        widget.sync_repo_intelligence_command_enabled();
         widget.sync_personality_command_enabled();
         widget.sync_plugins_command_enabled();
         widget
@@ -5074,6 +5077,18 @@ impl ChatWidget {
                 };
                 self.set_service_tier_selection(next_tier);
             }
+            SlashCommand::RepoIntel => {
+                if !self.repo_intel_command_enabled() {
+                    self.add_info_message(
+                        "Repository intelligence is disabled.".to_string(),
+                        Some("Enable it in /experimental to use /repo-intel.".to_string()),
+                    );
+                    return;
+                }
+                self.set_repository_intelligence_selection(
+                    !self.config.prefer_repository_intelligence,
+                );
+            }
             SlashCommand::Realtime => {
                 if !self.realtime_conversation_enabled() {
                     return;
@@ -5392,6 +5407,35 @@ impl ChatWidget {
                     _ => {
                         self.add_error_message("Usage: /fast [on|off|status]".to_string());
                     }
+                }
+            }
+            SlashCommand::RepoIntel => {
+                if trimmed.is_empty() {
+                    self.dispatch_command(cmd);
+                    return;
+                }
+                if !self.repo_intel_command_enabled() {
+                    self.add_info_message(
+                        "Repository intelligence is disabled.".to_string(),
+                        Some("Enable it in /experimental to use /repo-intel.".to_string()),
+                    );
+                    return;
+                }
+                match trimmed.to_ascii_lowercase().as_str() {
+                    "on" => self.set_repository_intelligence_selection(true),
+                    "off" => self.set_repository_intelligence_selection(false),
+                    "status" => {
+                        let status = if self.config.prefer_repository_intelligence {
+                            "on"
+                        } else {
+                            "off"
+                        };
+                        self.add_info_message(
+                            format!("Repository intelligence is {status}."),
+                            /*hint*/ None,
+                        );
+                    }
+                    _ => self.add_error_message("Usage: /repo-intel [on|off|status]".to_string()),
                 }
             }
             SlashCommand::Rename if !trimmed.is_empty() => {
@@ -9330,6 +9374,9 @@ impl ChatWidget {
         if feature == Feature::FastMode {
             self.sync_fast_command_enabled();
         }
+        if feature == Feature::RepositoryIntelligence {
+            self.sync_repo_intelligence_command_enabled();
+        }
         if feature == Feature::Personality {
             self.sync_personality_command_enabled();
         }
@@ -9438,6 +9485,10 @@ impl ChatWidget {
         self.config.service_tier = service_tier;
     }
 
+    pub(crate) fn set_prefer_repository_intelligence(&mut self, enabled: bool) {
+        self.config.prefer_repository_intelligence = enabled;
+    }
+
     pub(crate) fn current_service_tier(&self) -> Option<ServiceTier> {
         self.config.service_tier
     }
@@ -9484,6 +9535,16 @@ impl ChatWidget {
 
     fn fast_mode_enabled(&self) -> bool {
         self.config.features.enabled(Feature::FastMode)
+    }
+
+    fn repo_intel_command_enabled(&self) -> bool {
+        self.config
+            .features
+            .enabled(Feature::RepositoryIntelligence)
+    }
+
+    fn repository_intelligence_enabled(&self) -> bool {
+        self.repo_intel_command_enabled() && self.config.prefer_repository_intelligence
     }
 
     pub(crate) fn set_realtime_audio_device(
@@ -9539,6 +9600,26 @@ impl ChatWidget {
             .send(AppEvent::PersistServiceTierSelection { service_tier });
     }
 
+    fn set_repository_intelligence_selection(&mut self, enabled: bool) {
+        self.set_prefer_repository_intelligence(enabled);
+        self.app_event_tx.send(AppEvent::CodexOp(
+            AppCommand::override_turn_context(
+                /*cwd*/ None,
+                /*approval_policy*/ None,
+                /*approvals_reviewer*/ None,
+                /*sandbox_policy*/ None,
+                /*windows_sandbox_level*/ None,
+                /*model*/ None,
+                /*effort*/ None,
+                /*summary*/ None,
+                /*service_tier*/ None,
+                Some(self.effective_collaboration_mode()),
+                /*personality*/ None,
+            )
+            .into_core(),
+        ));
+    }
+
     pub(crate) fn current_model(&self) -> &str {
         if !self.collaboration_modes_enabled() {
             return self.current_collaboration_mode.model();
@@ -9568,6 +9649,11 @@ impl ChatWidget {
     fn sync_fast_command_enabled(&mut self) {
         self.bottom_pane
             .set_fast_command_enabled(self.fast_mode_enabled());
+    }
+
+    fn sync_repo_intelligence_command_enabled(&mut self) {
+        self.bottom_pane
+            .set_repository_intelligence_command_enabled(self.repo_intel_command_enabled());
     }
 
     fn sync_personality_command_enabled(&mut self) {
@@ -9677,12 +9763,22 @@ impl ChatWidget {
     }
 
     fn effective_collaboration_mode(&self) -> CollaborationMode {
-        if !self.collaboration_modes_enabled() {
-            return self.current_collaboration_mode.clone();
-        }
-        self.active_collaboration_mask.as_ref().map_or_else(
-            || self.current_collaboration_mode.clone(),
-            |mask| self.current_collaboration_mode.apply_mask(mask),
+        let effective = if !self.collaboration_modes_enabled() {
+            self.current_collaboration_mode.clone()
+        } else {
+            self.active_collaboration_mask.as_ref().map_or_else(
+                || self.current_collaboration_mode.clone(),
+                |mask| self.current_collaboration_mode.apply_mask(mask),
+            )
+        };
+
+        effective.with_updates(
+            /*model*/ None,
+            /*effort*/ None,
+            Some(merge_repository_intelligence_developer_instructions(
+                effective.settings.developer_instructions.as_deref(),
+                self.repository_intelligence_enabled(),
+            )),
         )
     }
 

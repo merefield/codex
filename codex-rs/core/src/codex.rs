@@ -611,7 +611,11 @@ impl Codex {
             settings: Settings {
                 model: model.clone(),
                 reasoning_effort: config.model_reasoning_effort,
-                developer_instructions: None,
+                developer_instructions: merge_repository_intelligence_developer_instructions(
+                    None,
+                    config.features.enabled(Feature::RepositoryIntelligence)
+                        && config.prefer_repository_intelligence,
+                ),
             },
         };
         let session_configuration = SessionConfiguration {
@@ -3639,14 +3643,44 @@ impl Session {
                 );
             }
         }
-        if turn_context.apps_enabled() {
+        let repo_intelligence_enabled = turn_context
+            .features
+            .enabled(Feature::RepositoryIntelligence)
+            && (turn_context.config.prefer_repository_intelligence
+                || crate::repository_intelligence::is_enabled_in_developer_instructions(
+                    turn_context
+                        .collaboration_mode
+                        .settings
+                        .developer_instructions
+                        .as_deref(),
+                ));
+        let mcp_tools = if repo_intelligence_enabled || turn_context.apps_enabled() {
             let mcp_connection_manager = self.services.mcp_connection_manager.read().await;
-            let accessible_and_enabled_connectors =
+            Some(mcp_connection_manager.list_all_tools().await)
+        } else {
+            None
+        };
+        if repo_intelligence_enabled
+            && let Some(repo_intelligence_section) = mcp_tools
+                .as_ref()
+                .and_then(build_mcp_repository_intelligence_developer_instructions)
+        {
+            developer_sections.push(repo_intelligence_section);
+        }
+        if turn_context.apps_enabled() {
+            let accessible_and_enabled_connectors = if let Some(mcp_tools) = mcp_tools.as_ref() {
+                connectors::list_accessible_and_enabled_connectors_from_mcp_tools(
+                    mcp_tools,
+                    &turn_context.config,
+                )
+            } else {
+                let mcp_connection_manager = self.services.mcp_connection_manager.read().await;
                 connectors::list_accessible_and_enabled_connectors_from_manager(
                     &mcp_connection_manager,
                     &turn_context.config,
                 )
-                .await;
+                .await
+            };
             if let Some(apps_section) = render_apps_section(&accessible_and_enabled_connectors) {
                 developer_sections.push(apps_section);
             }
@@ -7647,6 +7681,8 @@ pub(super) fn get_last_assistant_message_from_turn(responses: &[ResponseItem]) -
 }
 
 use crate::memories::prompts::build_memory_tool_developer_instructions;
+use crate::repository_intelligence::build_mcp_developer_instructions as build_mcp_repository_intelligence_developer_instructions;
+use crate::repository_intelligence::merge_developer_instructions as merge_repository_intelligence_developer_instructions;
 #[cfg(test)]
 pub(crate) use tests::make_session_and_context;
 #[cfg(test)]

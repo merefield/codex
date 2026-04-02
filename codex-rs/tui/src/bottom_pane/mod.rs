@@ -321,6 +321,12 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub fn set_repository_intelligence_command_enabled(&mut self, enabled: bool) {
+        self.composer
+            .set_repository_intelligence_command_enabled(enabled);
+        self.request_redraw();
+    }
+
     pub fn set_realtime_conversation_enabled(&mut self, enabled: bool) {
         self.composer.set_realtime_conversation_enabled(enabled);
         self.request_redraw();

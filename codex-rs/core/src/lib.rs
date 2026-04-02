@@ -109,6 +109,7 @@ pub use model_provider_info::WireApi;
 pub use model_provider_info::built_in_model_providers;
 pub use model_provider_info::create_oss_provider_with_base_url;
 mod event_mapping;
+pub mod repository_intelligence;
 mod response_debug_context;
 pub mod review_format;
 pub mod review_prompts;

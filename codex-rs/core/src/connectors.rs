@@ -108,13 +108,20 @@ pub(crate) async fn list_accessible_and_enabled_connectors_from_manager(
     mcp_connection_manager: &McpConnectionManager,
     config: &Config,
 ) -> Vec<AppInfo> {
-    with_app_enabled_state(
-        accessible_connectors_from_mcp_tools(&mcp_connection_manager.list_all_tools().await),
+    list_accessible_and_enabled_connectors_from_mcp_tools(
+        &mcp_connection_manager.list_all_tools().await,
         config,
     )
-    .into_iter()
-    .filter(|connector| connector.is_accessible && connector.is_enabled)
-    .collect()
+}
+
+pub(crate) fn list_accessible_and_enabled_connectors_from_mcp_tools(
+    mcp_tools: &HashMap<String, ToolInfo>,
+    config: &Config,
+) -> Vec<AppInfo> {
+    with_app_enabled_state(accessible_connectors_from_mcp_tools(mcp_tools), config)
+        .into_iter()
+        .filter(|connector| connector.is_accessible && connector.is_enabled)
+        .collect()
 }
 
 pub(crate) async fn list_tool_suggest_discoverable_tools_with_auth(

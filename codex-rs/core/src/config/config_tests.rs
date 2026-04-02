@@ -207,6 +207,24 @@ enabled = false
 }
 
 #[test]
+fn load_config_parses_repository_intelligence_preference() {
+    let cfg: ConfigToml = toml::from_str(
+        "prefer_repository_intelligence = true
+",
+    )
+    .expect("TOML deserialization should succeed");
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").path().to_path_buf(),
+    )
+    .expect("load config from repository intelligence setting");
+
+    assert!(config.prefer_repository_intelligence);
+}
+
+#[test]
 fn tools_web_search_true_deserializes_to_none() {
     let cfg: ConfigToml = toml::from_str(
         r#"
@@ -4493,6 +4511,7 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             experimental_realtime_ws_startup_context: None,
             base_instructions: None,
             developer_instructions: None,
+            prefer_repository_intelligence: false,
             guardian_developer_instructions: None,
             compact_prompt: None,
             commit_attribution: None,
@@ -4635,6 +4654,7 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         experimental_realtime_ws_startup_context: None,
         base_instructions: None,
         developer_instructions: None,
+        prefer_repository_intelligence: false,
         guardian_developer_instructions: None,
         compact_prompt: None,
         commit_attribution: None,
@@ -4775,6 +4795,7 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         experimental_realtime_ws_startup_context: None,
         base_instructions: None,
         developer_instructions: None,
+        prefer_repository_intelligence: false,
         guardian_developer_instructions: None,
         compact_prompt: None,
         commit_attribution: None,
@@ -4901,6 +4922,7 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         experimental_realtime_ws_startup_context: None,
         base_instructions: None,
         developer_instructions: None,
+        prefer_repository_intelligence: false,
         guardian_developer_instructions: None,
         compact_prompt: None,
         commit_attribution: None,

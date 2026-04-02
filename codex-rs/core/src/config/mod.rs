@@ -277,6 +277,9 @@ pub struct Config {
     /// Developer instructions override injected as a separate message.
     pub developer_instructions: Option<String>,
 
+    /// Prefer structured repository-intelligence MCP tools for code discovery.
+    pub prefer_repository_intelligence: bool,
+
     /// Guardian-specific developer instructions override from requirements.toml.
     pub guardian_developer_instructions: Option<String>,
 
@@ -1170,6 +1173,9 @@ pub struct ConfigToml {
     /// Developer instructions inserted as a `developer` role message.
     #[serde(default)]
     pub developer_instructions: Option<String>,
+
+    /// Prefer structured repository-intelligence MCP tools for code discovery.
+    pub prefer_repository_intelligence: Option<bool>,
 
     /// Optional path to a file containing model instructions that will override
     /// the built-in instructions for the selected model. Users are STRONGLY
@@ -2611,6 +2617,7 @@ impl Config {
             base_instructions,
             personality,
             developer_instructions,
+            prefer_repository_intelligence: cfg.prefer_repository_intelligence.unwrap_or(false),
             compact_prompt,
             commit_attribution,
             // The config.toml omits "_mode" because it's a config file. However, "_mode"
