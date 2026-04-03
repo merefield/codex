@@ -2,9 +2,10 @@ use super::*;
 use crate::shell::default_user_shell;
 use crate::tools::handlers::parse_arguments_with_base_path;
 use crate::tools::handlers::resolve_workdir_base_path;
-use crate::tools::spec::ZshForkConfig;
 use codex_protocol::models::FileSystemPermissions;
 use codex_protocol::models::PermissionProfile;
+use codex_tools::UnifiedExecShellMode;
+use codex_tools::ZshForkConfig;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use std::fs;
@@ -215,7 +216,8 @@ async fn exec_command_pre_tool_use_payload_uses_raw_command() {
             payload,
         }),
         Some(crate::tools::registry::PreToolUsePayload {
-            command: "printf exec command".to_string(),
+            tool_name: "Bash".to_string(),
+            tool_input: codex_hooks::ToolUseHookInput::Command("printf exec command".to_string()),
         })
     );
 }
@@ -266,7 +268,8 @@ fn exec_command_post_tool_use_payload_uses_output_for_noninteractive_one_shot_co
     assert_eq!(
         UnifiedExecHandler.post_tool_use_payload("call-43", &payload, &output),
         Some(crate::tools::registry::PostToolUsePayload {
-            command: "echo three".to_string(),
+            tool_name: "Bash".to_string(),
+            tool_input: codex_hooks::ToolUseHookInput::Command("echo three".to_string()),
             tool_response: serde_json::json!("three"),
         })
     );

@@ -157,8 +157,11 @@ pub(crate) enum PreToolUseDecisionWire {
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub(crate) struct PreToolUseToolInput {
-    pub command: String,
+pub(crate) struct ToolUseTextInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -177,15 +180,8 @@ pub(crate) struct PreToolUseCommandInput {
     pub permission_mode: String,
     #[schemars(schema_with = "pre_tool_use_tool_name_schema")]
     pub tool_name: String,
-    pub tool_input: PreToolUseToolInput,
+    pub tool_input: ToolUseTextInput,
     pub tool_use_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub(crate) struct PostToolUseToolInput {
-    pub command: String,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -204,7 +200,7 @@ pub(crate) struct PostToolUseCommandInput {
     pub permission_mode: String,
     #[schemars(schema_with = "post_tool_use_tool_name_schema")]
     pub tool_name: String,
-    pub tool_input: PostToolUseToolInput,
+    pub tool_input: ToolUseTextInput,
     pub tool_response: Value,
     pub tool_use_id: String,
 }
@@ -454,7 +450,7 @@ fn post_tool_use_hook_event_name_schema(_gen: &mut SchemaGenerator) -> Schema {
 }
 
 fn post_tool_use_tool_name_schema(_gen: &mut SchemaGenerator) -> Schema {
-    string_const_schema("Bash")
+    string_enum_schema(&["Bash", "Edit"])
 }
 
 fn pre_tool_use_hook_event_name_schema(_gen: &mut SchemaGenerator) -> Schema {
@@ -462,7 +458,7 @@ fn pre_tool_use_hook_event_name_schema(_gen: &mut SchemaGenerator) -> Schema {
 }
 
 fn pre_tool_use_tool_name_schema(_gen: &mut SchemaGenerator) -> Schema {
-    string_const_schema("Bash")
+    string_enum_schema(&["Bash", "Edit"])
 }
 
 fn user_prompt_submit_hook_event_name_schema(_gen: &mut SchemaGenerator) -> Schema {

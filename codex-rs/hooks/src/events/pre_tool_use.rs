@@ -15,6 +15,7 @@ use crate::engine::command_runner::CommandRunResult;
 use crate::engine::dispatcher;
 use crate::engine::output_parser;
 use crate::schema::PreToolUseCommandInput;
+use crate::schema::ToolUseTextInput;
 
 #[derive(Debug, Clone)]
 pub struct PreToolUseRequest {
@@ -26,7 +27,7 @@ pub struct PreToolUseRequest {
     pub permission_mode: String,
     pub tool_name: String,
     pub tool_use_id: String,
-    pub command: String,
+    pub tool_input: super::common::ToolUseHookInput,
 }
 
 #[derive(Debug)]
@@ -74,6 +75,17 @@ pub(crate) async fn run(
         };
     }
 
+    let tool_input = match &request.tool_input {
+        super::common::ToolUseHookInput::Command(command) => ToolUseTextInput {
+            command: Some(command.clone()),
+            input: None,
+        },
+        super::common::ToolUseHookInput::Input(input) => ToolUseTextInput {
+            command: None,
+            input: Some(input.clone()),
+        },
+    };
+
     let input_json = match serde_json::to_string(&PreToolUseCommandInput {
         session_id: request.session_id.to_string(),
         turn_id: request.turn_id.clone(),
@@ -82,10 +94,8 @@ pub(crate) async fn run(
         hook_event_name: "PreToolUse".to_string(),
         model: request.model.clone(),
         permission_mode: request.permission_mode.clone(),
-        tool_name: "Bash".to_string(),
-        tool_input: crate::schema::PreToolUseToolInput {
-            command: request.command.clone(),
-        },
+        tool_name: request.tool_name.clone(),
+        tool_input,
         tool_use_id: request.tool_use_id.clone(),
     }) {
         Ok(input_json) => input_json,

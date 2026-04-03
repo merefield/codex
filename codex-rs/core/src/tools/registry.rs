@@ -3,19 +3,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::client_common::tools::ToolSpec;
 use crate::function_tool::FunctionCallError;
 use crate::hook_runtime::record_additional_contexts;
 use crate::hook_runtime::run_post_tool_use_hooks;
 use crate::hook_runtime::run_pre_tool_use_hooks;
 use crate::memories::usage::emit_metric_for_tool_read;
-use crate::protocol::SandboxPolicy;
 use crate::sandbox_tags::sandbox_tag;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
-use async_trait::async_trait;
 use codex_hooks::HookEvent;
 use codex_hooks::HookEventAfterToolUse;
 use codex_hooks::HookPayload;
@@ -23,8 +20,13 @@ use codex_hooks::HookResult;
 use codex_hooks::HookToolInput;
 use codex_hooks::HookToolInputLocalShell;
 use codex_hooks::HookToolKind;
+use codex_hooks::ToolUseHookInput;
 use codex_protocol::models::ResponseInputItem;
+use codex_protocol::protocol::SandboxPolicy;
+use codex_tools::ConfiguredToolSpec;
+use codex_tools::ToolSpec;
 use codex_utils_readiness::Readiness;
+use futures::future::BoxFuture;
 use serde_json::Value;
 use tracing::warn;
 
@@ -34,7 +36,6 @@ pub enum ToolKind {
     Mcp,
 }
 
-#[async_trait]
 pub trait ToolHandler: Send + Sync {
     type Output: ToolOutput + 'static;
 
@@ -53,8 +54,11 @@ pub trait ToolHandler: Send + Sync {
     /// user (through file system, OS operations, ...).
     /// This function must remains defensive and return `true` if a doubt exist on the
     /// exact effect of a ToolInvocation.
-    async fn is_mutating(&self, _invocation: &ToolInvocation) -> bool {
-        false
+    fn is_mutating(
+        &self,
+        _invocation: &ToolInvocation,
+    ) -> impl std::future::Future<Output = bool> + Send {
+        async { false }
     }
 
     fn pre_tool_use_payload(&self, _invocation: &ToolInvocation) -> Option<PreToolUsePayload> {
@@ -72,7 +76,10 @@ pub trait ToolHandler: Send + Sync {
 
     /// Perform the actual [ToolInvocation] and returns a [ToolOutput] containing
     /// the final output to return to the model.
-    async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError>;
+    fn handle(
+        &self,
+        invocation: ToolInvocation,
+    ) -> impl std::future::Future<Output = Result<Self::Output, FunctionCallError>> + Send;
 }
 
 pub(crate) struct AnyToolResult {
@@ -102,20 +109,21 @@ impl AnyToolResult {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PreToolUsePayload {
-    pub(crate) command: String,
+    pub(crate) tool_name: String,
+    pub(crate) tool_input: ToolUseHookInput,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PostToolUsePayload {
-    pub(crate) command: String,
+    pub(crate) tool_name: String,
+    pub(crate) tool_input: ToolUseHookInput,
     pub(crate) tool_response: Value,
 }
 
-#[async_trait]
 trait AnyToolHandler: Send + Sync {
     fn matches_kind(&self, payload: &ToolPayload) -> bool;
 
-    async fn is_mutating(&self, invocation: &ToolInvocation) -> bool;
+    fn is_mutating<'a>(&'a self, invocation: &'a ToolInvocation) -> BoxFuture<'a, bool>;
 
     fn pre_tool_use_payload(&self, invocation: &ToolInvocation) -> Option<PreToolUsePayload>;
 
@@ -126,13 +134,12 @@ trait AnyToolHandler: Send + Sync {
         result: &dyn ToolOutput,
     ) -> Option<PostToolUsePayload>;
 
-    async fn handle_any(
-        &self,
+    fn handle_any<'a>(
+        &'a self,
         invocation: ToolInvocation,
-    ) -> Result<AnyToolResult, FunctionCallError>;
+    ) -> BoxFuture<'a, Result<AnyToolResult, FunctionCallError>>;
 }
 
-#[async_trait]
 impl<T> AnyToolHandler for T
 where
     T: ToolHandler,
@@ -141,8 +148,8 @@ where
         ToolHandler::matches_kind(self, payload)
     }
 
-    async fn is_mutating(&self, invocation: &ToolInvocation) -> bool {
-        ToolHandler::is_mutating(self, invocation).await
+    fn is_mutating<'a>(&'a self, invocation: &'a ToolInvocation) -> BoxFuture<'a, bool> {
+        Box::pin(ToolHandler::is_mutating(self, invocation))
     }
 
     fn pre_tool_use_payload(&self, invocation: &ToolInvocation) -> Option<PreToolUsePayload> {
@@ -158,17 +165,19 @@ where
         ToolHandler::post_tool_use_payload(self, call_id, payload, result)
     }
 
-    async fn handle_any(
-        &self,
+    fn handle_any<'a>(
+        &'a self,
         invocation: ToolInvocation,
-    ) -> Result<AnyToolResult, FunctionCallError> {
-        let call_id = invocation.call_id.clone();
-        let payload = invocation.payload.clone();
-        let output = self.handle(invocation).await?;
-        Ok(AnyToolResult {
-            call_id,
-            payload,
-            result: Box::new(output),
+    ) -> BoxFuture<'a, Result<AnyToolResult, FunctionCallError>> {
+        Box::pin(async move {
+            let call_id = invocation.call_id.clone();
+            let payload = invocation.payload.clone();
+            let output = self.handle(invocation).await?;
+            Ok(AnyToolResult {
+                call_id,
+                payload,
+                result: Box::new(output),
+            })
         })
     }
 }
@@ -300,14 +309,20 @@ impl ToolRegistry {
                 &invocation.session,
                 &invocation.turn,
                 invocation.call_id.clone(),
-                pre_tool_use_payload.command.clone(),
+                pre_tool_use_payload.tool_name.clone(),
+                pre_tool_use_payload.tool_input.clone(),
             )
             .await
         {
-            return Err(FunctionCallError::RespondToModel(format!(
-                "Command blocked by PreToolUse hook: {reason}. Command: {}",
-                pre_tool_use_payload.command
-            )));
+            let message = match &pre_tool_use_payload.tool_input {
+                ToolUseHookInput::Command(command) => {
+                    format!("Command blocked by PreToolUse hook: {reason}. Command: {command}")
+                }
+                ToolUseHookInput::Input(_) => {
+                    format!("Tool blocked by PreToolUse hook: {reason}. Tool: {tool_name}")
+                }
+            };
+            return Err(FunctionCallError::RespondToModel(message));
         }
 
         let is_mutating = handler.is_mutating(&invocation).await;
@@ -370,7 +385,8 @@ impl ToolRegistry {
                     &invocation.session,
                     &invocation.turn,
                     invocation.call_id.clone(),
-                    post_tool_use_payload.command,
+                    post_tool_use_payload.tool_name,
+                    post_tool_use_payload.tool_input,
                     post_tool_use_payload.tool_response,
                 )
                 .await,
@@ -432,21 +448,6 @@ impl ToolRegistry {
                 Ok(result)
             }
             Err(err) => Err(err),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ConfiguredToolSpec {
-    pub spec: ToolSpec,
-    pub supports_parallel_tool_calls: bool,
-}
-
-impl ConfiguredToolSpec {
-    pub fn new(spec: ToolSpec, supports_parallel_tool_calls: bool) -> Self {
-        Self {
-            spec,
-            supports_parallel_tool_calls,
         }
     }
 }

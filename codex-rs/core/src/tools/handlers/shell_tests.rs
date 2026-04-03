@@ -6,9 +6,6 @@ use pretty_assertions::assert_eq;
 
 use crate::codex::make_session_and_context;
 use crate::exec_env::create_env;
-use crate::is_safe_command::is_known_safe_command;
-use crate::powershell::try_find_powershell_executable_blocking;
-use crate::powershell::try_find_pwsh_executable_blocking;
 use crate::sandboxing::SandboxPermissions;
 use crate::shell::Shell;
 use crate::shell::ShellType;
@@ -20,6 +17,9 @@ use crate::tools::handlers::ShellCommandHandler;
 use crate::tools::handlers::ShellHandler;
 use crate::tools::registry::ToolHandler;
 use crate::turn_diff_tracker::TurnDiffTracker;
+use codex_shell_command::is_safe_command::is_known_safe_command;
+use codex_shell_command::powershell::try_find_powershell_executable_blocking;
+use codex_shell_command::powershell::try_find_pwsh_executable_blocking;
 use serde_json::json;
 use tokio::sync::Mutex;
 use tokio::sync::watch;
@@ -230,7 +230,8 @@ async fn shell_pre_tool_use_payload_uses_joined_command() {
             payload,
         }),
         Some(crate::tools::registry::PreToolUsePayload {
-            command: "bash -lc 'printf hi'".to_string(),
+            tool_name: "Bash".to_string(),
+            tool_input: codex_hooks::ToolUseHookInput::Command("bash -lc 'printf hi'".to_string()),
         })
     );
 }
@@ -256,7 +257,8 @@ async fn shell_command_pre_tool_use_payload_uses_raw_command() {
             payload,
         }),
         Some(crate::tools::registry::PreToolUsePayload {
-            command: "printf shell command".to_string(),
+            tool_name: "Bash".to_string(),
+            tool_input: codex_hooks::ToolUseHookInput::Command("printf shell command".to_string()),
         })
     );
 }
@@ -278,7 +280,8 @@ fn build_post_tool_use_payload_uses_tool_output_wire_value() {
     assert_eq!(
         handler.post_tool_use_payload("call-42", &payload, &output),
         Some(crate::tools::registry::PostToolUsePayload {
-            command: "printf shell command".to_string(),
+            tool_name: "Bash".to_string(),
+            tool_input: codex_hooks::ToolUseHookInput::Command("printf shell command".to_string()),
             tool_response: json!("shell output"),
         })
     );
