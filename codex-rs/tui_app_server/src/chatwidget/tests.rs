@@ -10143,6 +10143,108 @@ async fn fast_slash_command_updates_and_persists_local_service_tier() {
 }
 
 #[tokio::test]
+async fn repository_intelligence_slash_command_updates_collaboration_mode_instructions() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.3-codex")).await;
+    chat.set_feature_enabled(Feature::RepositoryIntelligence, /*enabled*/ true);
+
+    chat.dispatch_command(SlashCommand::RepoIntel);
+
+    assert!(chat.config.prefer_repository_intelligence);
+
+    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            AppEvent::CodexOp(Op::OverrideTurnContext {
+                collaboration_mode: Some(mode),
+                ..
+            }) if mode
+                .settings
+                .developer_instructions
+                .as_deref()
+                .is_some_and(|instructions| {
+                    instructions.contains(
+                        codex_core::repository_intelligence::DEVELOPER_INSTRUCTIONS,
+                    )
+                })
+        )),
+        "expected repository-intelligence override app event; events: {events:?}"
+    );
+
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+}
+
+#[tokio::test]
+async fn repository_intelligence_instructions_require_experimental_feature() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-codex")).await;
+    chat.set_prefer_repository_intelligence(true);
+
+    let instructions = chat
+        .effective_collaboration_mode()
+        .settings
+        .developer_instructions
+        .unwrap_or_default();
+
+    assert!(
+        !instructions.contains(codex_core::repository_intelligence::DEVELOPER_INSTRUCTIONS),
+        "repository-intelligence instructions should remain disabled without the feature flag",
+    );
+}
+
+#[tokio::test]
+async fn repository_intelligence_instructions_require_user_opt_in() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-codex")).await;
+    chat.set_feature_enabled(Feature::RepositoryIntelligence, /*enabled*/ true);
+
+    let instructions = chat
+        .effective_collaboration_mode()
+        .settings
+        .developer_instructions
+        .unwrap_or_default();
+
+    assert!(
+        !instructions.contains(codex_core::repository_intelligence::DEVELOPER_INSTRUCTIONS),
+        "repository-intelligence instructions should remain disabled until the user opts in",
+    );
+}
+
+#[tokio::test]
+async fn repository_intelligence_slash_command_removes_instructions_when_disabled() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.3-codex")).await;
+    chat.set_feature_enabled(Feature::RepositoryIntelligence, /*enabled*/ true);
+
+    chat.dispatch_command(SlashCommand::RepoIntel);
+    let _enable_events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+
+    chat.dispatch_command(SlashCommand::RepoIntel);
+
+    assert!(!chat.config.prefer_repository_intelligence);
+
+    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            AppEvent::CodexOp(Op::OverrideTurnContext {
+                collaboration_mode: Some(mode),
+                ..
+            }) if mode
+                .settings
+                .developer_instructions
+                .as_deref()
+                .is_none_or(|instructions| {
+                    !instructions.contains(
+                        codex_core::repository_intelligence::DEVELOPER_INSTRUCTIONS,
+                    )
+                })
+        )),
+        "expected repository-intelligence disable override app event; events: {events:?}"
+    );
+
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+}
+
+#[tokio::test]
 async fn user_turn_carries_service_tier_after_fast_toggle() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.3-codex")).await;
     chat.thread_id = Some(ThreadId::new());
